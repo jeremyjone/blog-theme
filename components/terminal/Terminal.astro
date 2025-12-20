@@ -1,0 +1,774 @@
+---
+import { siteConfig } from "@config/site";
+---
+
+<div class="terminal-window">
+    <div class="terminal-header">
+        <div class="terminal-buttons">
+            <span class="btn btn-close"></span>
+            <span class="btn btn-minimize"></span>
+            <span class="btn btn-maximize"></span>
+        </div>
+        <div class="terminal-title">{siteConfig.terminal.profile}</div>
+    </div>
+    <div class="terminal-body">
+        <div class="terminal-content" id="terminal-content">
+            <!-- 内容将通过 JS 动态生成 -->
+        </div>
+    </div>
+</div>
+
+<script>
+    import {
+        autoCommands,
+        commands,
+        commandsNeedingArgs,
+        executeCatCommand
+    } from "@config/terminal";
+    import { siteConfig } from "@config/site";
+
+    // 配置
+    const PROMPT = siteConfig.terminal.prompt;
+    // 自动演示的命令序列
+    const AUTO_COMMANDS = autoCommands;
+    // 导入命令库
+    const commandLibrary: Record<string, () => string> = {
+        ...commands,
+        // 历史需要用到命令历史
+        history: () => {
+            if (commandHistory.length === 0) return "No command history";
+            return commandHistory
+                .map((cmd, i) => `  ${i + 1}  ${cmd}`)
+                .join("\n");
+        },
+        // cat 命令需要特殊处理
+        cat: () => ""
+    };
+
+    // 获取所有可用命令（用于自动补全）
+    function getAvailableCommands(): string[] {
+        return Object.keys(commandLibrary).sort();
+    }
+
+    // Tab 补全状态
+    let tabCompletionMatches: string[] = [];
+    let tabCompletionIndex = -1;
+    let lastInputForTab = "";
+
+    // 命令历史
+    let commandHistory: string[] = [];
+    let historyIndex = -1;
+    let isAutoTyping = false;
+
+    // 执行命令
+    function executeCommand(input: string): string {
+        const trimmed = input.trim();
+
+        if (trimmed === "") return "";
+
+        // 处理 cat 命令
+        if (trimmed.startsWith("cat ")) {
+            return executeCatCommand(trimmed);
+        }
+
+        // 特殊命令，在这里添加
+
+        // 处理预设命令
+        if (trimmed in commandLibrary) {
+            return commandLibrary[trimmed]();
+        }
+
+        // 未找到命令 - macOS 风格
+        return `zsh: command not found: ${trimmed.split(" ")[0]}`;
+    }
+
+    // 将文本中的 URL 转换为可点击的链接
+    function linkifyText(text: string): string {
+        // 匹配 http://, https://, mailto: 等协议的 URL
+        const urlRegex = /(https?:\/\/[^\s]+|mailto:[^\s]+)/g;
+
+        // 转义 HTML 特殊字符（防止 XSS）
+        const escapeHtml = (str: string) => {
+            const div = document.createElement("div");
+            div.textContent = str;
+            return div.innerHTML;
+        };
+
+        // 将 URL 替换为链接标签
+        return escapeHtml(text).replace(urlRegex, url => {
+            return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+        });
+    }
+
+    // 添加输出行
+    function addOutputLine(text: string) {
+        const terminalContent = document.getElementById("terminal-content");
+        if (!terminalContent) return;
+
+        const line = document.createElement("div");
+        line.className = "terminal-line output";
+        // 使用 innerHTML 来支持链接渲染
+        line.innerHTML = linkifyText(text);
+        terminalContent.appendChild(line);
+
+        // 滚动到底部
+        scrollToBottom();
+    }
+
+    // 添加带提示符的命令行（用于自动打字或显示已执行的命令）
+    function addCommandLine(command: string = "") {
+        const terminalContent = document.getElementById("terminal-content");
+        if (!terminalContent) return null;
+
+        const line = document.createElement("div");
+        line.className = "terminal-line command";
+
+        const prompt = document.createElement("span");
+        prompt.className = "prompt";
+        prompt.textContent = PROMPT;
+        line.appendChild(prompt);
+
+        const textSpan = document.createElement("span");
+        textSpan.className = "text-content";
+        textSpan.textContent = command;
+        line.appendChild(textSpan);
+
+        terminalContent.appendChild(line);
+        scrollToBottom();
+
+        return { line, textSpan };
+    }
+
+    // 滚动到底部的辅助函数
+    function scrollToBottom() {
+        const terminalBody = document.querySelector(
+            ".terminal-body"
+        ) as HTMLElement;
+        if (terminalBody) {
+            // 使用 requestAnimationFrame 确保 DOM 更新后再滚动
+            requestAnimationFrame(() => {
+                terminalBody.scrollTop = terminalBody.scrollHeight;
+            });
+        }
+    }
+
+    // 添加可交互的输入行（使用 contenteditable 真正模拟终端）
+    function addInputLine(shouldScroll: boolean = true) {
+        const terminalContent = document.getElementById("terminal-content");
+        if (!terminalContent) return;
+
+        const line = document.createElement("div");
+        line.className = "terminal-line input-line";
+
+        const prompt = document.createElement("span");
+        prompt.className = "prompt";
+        prompt.textContent = PROMPT;
+        line.appendChild(prompt);
+
+        // 使用 contenteditable div 替代 input，真正模拟终端
+        const inputDiv = document.createElement("span");
+        inputDiv.className = "terminal-input";
+        inputDiv.contentEditable = "true";
+        inputDiv.spellcheck = false;
+        line.appendChild(inputDiv);
+
+        const cursor = document.createElement("span");
+        cursor.className = "cursor";
+        cursor.textContent = "█";
+        line.appendChild(cursor);
+
+        // 自动完成提示
+        const suggestion = document.createElement("span");
+        suggestion.className = "suggestion";
+        line.appendChild(suggestion);
+
+        terminalContent.appendChild(line);
+
+        // 聚焦到可编辑区域
+        inputDiv.focus();
+
+        // 绑定事件
+        inputDiv.addEventListener("keydown", handleInput);
+        inputDiv.addEventListener("input", handleInputChange);
+
+        // 点击终端任意位置聚焦输入框
+        const clickHandler = () => {
+            if (!isAutoTyping && inputDiv) {
+                const terminalBody = document.querySelector(
+                    ".terminal-body"
+                ) as HTMLElement;
+
+                const currentScrollTop = terminalBody?.scrollTop || 0;
+
+                inputDiv.focus();
+                // 将光标移到末尾
+                const range = document.createRange();
+                const sel = window.getSelection();
+                if (inputDiv.childNodes.length > 0) {
+                    range.setStart(
+                        inputDiv.childNodes[inputDiv.childNodes.length - 1],
+                        inputDiv.textContent?.length || 0
+                    );
+                } else {
+                    range.setStart(inputDiv, 0);
+                }
+                range.collapse(true);
+                sel?.removeAllRanges();
+                sel?.addRange(range);
+
+                // 如果不需要滚动，恢复原来的滚动位置
+                if (terminalBody && currentScrollTop !== null) {
+                    terminalBody.scrollTop = currentScrollTop;
+                }
+            }
+        };
+        terminalContent.removeEventListener("click", clickHandler);
+        terminalContent.addEventListener("click", clickHandler);
+
+        if (shouldScroll) {
+            scrollToBottom();
+        }
+    }
+
+    // 处理输入变化（用于自动补全提示）
+    function handleInputChange(e: Event) {
+        const inputDiv = e.target as HTMLElement;
+        const line = inputDiv.parentElement;
+        if (!line) return;
+
+        const suggestion = line.querySelector(".suggestion") as HTMLElement;
+        if (!suggestion) return;
+
+        const inputText = inputDiv.textContent || "";
+        const trimmedInput = inputText.trim();
+
+        // 重置 Tab 补全状态（当输入改变时）
+        if (inputText !== lastInputForTab) {
+            tabCompletionIndex = -1;
+            tabCompletionMatches = [];
+            lastInputForTab = inputText;
+        }
+
+        // 查找匹配项
+        if (trimmedInput) {
+            let matches: string[] = [];
+            let matchPrefix = "";
+            let isArgCompletion = false;
+
+            // 检测是否在任何需要参数的命令后输入
+            for (const [cmd, args] of Object.entries(commandsNeedingArgs)) {
+                const regex = new RegExp(`^\\s*${cmd}\\s+(.*)$`);
+                const match = trimmedInput.match(regex);
+                if (match) {
+                    // 参数补全：使用该命令对应的参数列表
+                    const argPrefix = match[1];
+
+                    if (argPrefix) {
+                        matches = args.filter((arg: string) =>
+                            arg.startsWith(argPrefix)
+                        );
+                        matchPrefix = `${cmd} ${argPrefix}`;
+                        isArgCompletion = true;
+                    }
+                    break;
+                }
+
+                if (new RegExp(`^\\s*${cmd}\\s+$`).test(inputText)) {
+                    // 刚输入命令名，显示所有参数选项
+                    matches = args;
+                    matchPrefix = `${cmd} `;
+                    isArgCompletion = true;
+                    break;
+                }
+            }
+
+            // 如果不是参数补全，则进行命令补全
+            if (!isArgCompletion) {
+                matches = getAvailableCommands().filter(cmd =>
+                    cmd.startsWith(trimmedInput)
+                );
+                matchPrefix = trimmedInput;
+            }
+
+            // 更新补全状态
+            tabCompletionMatches = matches;
+
+            // 显示第一个匹配的建议（灰色部分）
+            if (matches.length > 0 && matches[0] !== trimmedInput) {
+                const prefixLength = isArgCompletion
+                    ? matchPrefix.split(" ").pop()?.length || 0
+                    : trimmedInput.length;
+                suggestion.textContent = matches[0].substring(prefixLength);
+            } else {
+                suggestion.textContent = "";
+            }
+        } else {
+            suggestion.textContent = "";
+            tabCompletionMatches = [];
+        }
+    }
+
+    // 处理用户输入
+    function handleInput(e: KeyboardEvent) {
+        const inputDiv = e.target as HTMLElement;
+        const line = inputDiv.parentElement;
+        if (!line) return;
+
+        const suggestion = line.querySelector(".suggestion") as HTMLElement;
+
+        if (e.key === "Enter") {
+            e.preventDefault();
+            const command = inputDiv.textContent || "";
+
+            // 保存命令历史
+            if (command.trim()) {
+                commandHistory.push(command);
+                historyIndex = commandHistory.length;
+            }
+
+            // 移除可编辑属性和光标，转换为普通命令行
+            inputDiv.contentEditable = "false";
+            const cursor = line.querySelector(".cursor");
+            if (cursor) cursor.remove();
+            if (suggestion) suggestion.remove();
+            line.classList.remove("input-line");
+
+            // 执行命令并显示结果
+            const output = executeCommand(command);
+            if (output) {
+                const lines = output.split("\n");
+                lines.forEach(line => addOutputLine(line));
+            }
+
+            // 添加新的输入行
+            addInputLine();
+        } else if (e.key === "Tab") {
+            e.preventDefault();
+            const inputText = inputDiv.textContent || "";
+            const trimmedInput = inputText; // tab 补全不切任何空白内容
+
+            if (!trimmedInput) return;
+
+            // 检测是否在任何需要参数的命令后
+            let commandPrefix: string | null = null;
+            for (const cmd of Object.keys(commandsNeedingArgs)) {
+                const regex = new RegExp(`^\\s*${cmd}\\s+`);
+                if (regex.test(trimmedInput)) {
+                    commandPrefix = cmd;
+                    break;
+                }
+            }
+
+            // 如果已有匹配列表，循环切换
+            if (tabCompletionMatches.length > 0) {
+                // 移动到下一个匹配
+                tabCompletionIndex =
+                    (tabCompletionIndex + 1) % tabCompletionMatches.length;
+                const selectedMatch = tabCompletionMatches[tabCompletionIndex];
+
+                // 更新输入内容
+                if (commandPrefix) {
+                    // 参数补全：保留命令前缀
+                    inputDiv.textContent = `${commandPrefix} ${selectedMatch}`;
+                } else {
+                    // 命令补全：直接替换
+                    inputDiv.textContent = selectedMatch;
+                }
+
+                // 清空建议
+                if (suggestion) suggestion.textContent = "";
+
+                // 将光标移到末尾
+                const range = document.createRange();
+                const sel = window.getSelection();
+                if (inputDiv.childNodes.length > 0) {
+                    range.setStart(
+                        inputDiv.childNodes[inputDiv.childNodes.length - 1],
+                        inputDiv.textContent?.length || 0
+                    );
+                } else {
+                    range.setStart(inputDiv, 0);
+                }
+                range.collapse(true);
+                sel?.removeAllRanges();
+                sel?.addRange(range);
+
+                // 更新 lastInputForTab 以保持匹配列表
+                lastInputForTab = inputDiv.textContent;
+            }
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            if (historyIndex > 0) {
+                historyIndex--;
+                inputDiv.textContent = commandHistory[historyIndex];
+                if (suggestion) suggestion.textContent = "";
+
+                // 移动光标到末尾
+                const range = document.createRange();
+                const sel = window.getSelection();
+                if (inputDiv.childNodes.length > 0) {
+                    range.setStart(
+                        inputDiv.childNodes[inputDiv.childNodes.length - 1],
+                        inputDiv.textContent?.length || 0
+                    );
+                } else {
+                    range.setStart(inputDiv, 0);
+                }
+                range.collapse(true);
+                sel?.removeAllRanges();
+                sel?.addRange(range);
+            }
+        } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            if (historyIndex < commandHistory.length - 1) {
+                historyIndex++;
+                inputDiv.textContent = commandHistory[historyIndex];
+            } else {
+                historyIndex = commandHistory.length;
+                inputDiv.textContent = "";
+            }
+            if (suggestion) suggestion.textContent = "";
+
+            // 移动光标到末尾
+            const range = document.createRange();
+            const sel = window.getSelection();
+            if (inputDiv.childNodes.length > 0) {
+                range.setStart(
+                    inputDiv.childNodes[inputDiv.childNodes.length - 1],
+                    inputDiv.textContent?.length || 0
+                );
+            } else {
+                range.setStart(inputDiv, 0);
+            }
+            range.collapse(true);
+            sel?.removeAllRanges();
+            sel?.addRange(range);
+        }
+    }
+
+    // 自动打字效果
+    async function autoType(
+        command: string,
+        textSpan: HTMLElement
+    ): Promise<void> {
+        // 自动键入前，先等待一段时间
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        for (let i = 0; i < command.length; i++) {
+            textSpan.textContent += command[i];
+            scrollToBottom(); // 每次打字后滚动
+            await new Promise(resolve => setTimeout(resolve, 150));
+        }
+
+        // 自动键入后，也等待一段时间
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // 初始化自动演示
+    async function initAutoDemo() {
+        isAutoTyping = true;
+
+        for (const cmd of AUTO_COMMANDS) {
+            // 添加命令行和光标
+            const result = addCommandLine();
+            if (!result) break;
+
+            const { line, textSpan } = result;
+
+            const cursor = document.createElement("span");
+            cursor.className = "cursor";
+            cursor.textContent = "█";
+            line.appendChild(cursor);
+
+            // 打字效果
+            await autoType(cmd, textSpan);
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            // 移除光标
+            cursor.remove();
+
+            // 显示命令结果
+            const output = executeCommand(cmd);
+            if (output) {
+                const lines = output.split("\n");
+                lines.forEach(line => addOutputLine(line));
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        isAutoTyping = false;
+
+        // 自动演示完成后，添加可交互输入行
+        addInputLine();
+    }
+
+    // 页面加载后启动
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", () => {
+            setTimeout(initAutoDemo, 300);
+        });
+    } else {
+        setTimeout(initAutoDemo, 300);
+    }
+</script>
+
+<style>
+    /* 终端窗口 */
+    .terminal-window {
+        background: #1e1e1e;
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        border: 1px solid #2d2d2d;
+        height: 410px;
+        display: flex;
+        flex-direction: column;
+        transition: box-shadow 0.3s ease;
+        box-shadow: none;
+    }
+
+    /* 聚焦时的阴影效果 */
+    .terminal-window:focus-within {
+        box-shadow: 0px 20px 60px rgba(255, 255, 255, 0.1);
+    }
+
+    :global([data-theme="light"]) .terminal-window {
+        background: #ffffff;
+        border: 1px solid #d1d1d6;
+    }
+
+    /* 亮色模式聚焦时的阴影 */
+    :global([data-theme="light"]) .terminal-window:focus-within {
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+    }
+
+    .terminal-header {
+        background: #323232;
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid #3d3d3d;
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    :global([data-theme="light"]) .terminal-header {
+        background: #e8e8ed;
+        border-bottom: 1px solid #c6c6c8;
+    }
+
+    .terminal-buttons {
+        display: flex;
+        gap: 8px;
+    }
+
+    .terminal-buttons .btn {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: block;
+    }
+
+    .btn-close {
+        background: #ff5f56;
+    }
+    .btn-minimize {
+        background: #ffbd2e;
+    }
+    .btn-maximize {
+        background: #27c93f;
+    }
+
+    .terminal-title {
+        font-family: var(--font-mono);
+        font-size: 0.8125rem;
+        color: var(--color-text-secondary);
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .terminal-body {
+        padding: 12px 16px; /* 减小内边距 */
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden; /* 隐藏横向滚动条 */
+        font-family: var(--font-mono);
+        font-size: 0.9375rem;
+        line-height: 1.4; /* 减小行高 */
+    }
+
+    .terminal-content {
+        /* 移除 min-height，让内容自然增长但不超过容器 */
+    }
+
+    /* 终端行 */
+    :global(.terminal-line) {
+        margin-bottom: 2px; /* 减小行间距 */
+        display: flex;
+        align-items: baseline;
+        position: relative;
+        flex-wrap: wrap; /* 允许换行 */
+        word-wrap: break-word; /* 自动换行 */
+        word-break: break-word; /* 断词换行 */
+        overflow-wrap: break-word; /* 确保长单词换行 */
+    }
+
+    /* 提示符 */
+    :global(.prompt) {
+        color: var(--color-primary);
+        font-weight: 500;
+        white-space: nowrap;
+        user-select: none;
+        flex-shrink: 0;
+        margin-right: 4px; /* $ 后面添加一点间距 */
+    }
+
+    /* 命令行 */
+    :global(.terminal-line.command) {
+        color: var(--color-text);
+    }
+
+    :global(.terminal-line.command .text-content) {
+        color: var(--color-text);
+        word-wrap: break-word; /* 自动换行 */
+        word-break: break-word;
+        overflow-wrap: break-word;
+    }
+
+    /* 输出行 */
+    :global(.terminal-line.output) {
+        color: var(--color-text-secondary);
+        padding-left: 0;
+        white-space: pre-wrap; /* 改为 pre-wrap 支持换行 */
+        word-wrap: break-word; /* 自动换行 */
+        word-break: break-word;
+        overflow-wrap: break-word;
+        font-family: var(--font-mono); /* 确保使用等宽字体 */
+        max-width: 100%; /* 限制最大宽度 */
+    }
+
+    /* 输出行中的链接样式 */
+    :global(.terminal-line.output a) {
+        color: var(--color-primary);
+        text-decoration: underline;
+        cursor: pointer;
+        transition: opacity 0.2s ease;
+    }
+
+    :global(.terminal-line.output a:hover) {
+        opacity: 0.8;
+    }
+
+    /* 输入行 */
+    :global(.terminal-line.input-line) {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+    }
+
+    /* 使用 contenteditable 的输入区域 */
+    :global(.terminal-input) {
+        outline: none; /* 移除聚焦时的轮廓 */
+        color: var(--color-text);
+        font-family: var(--font-mono);
+        font-size: 0.9375rem;
+        white-space: pre-wrap; /* 支持自动换行 */
+        word-wrap: break-word; /* 自动换行 */
+        word-break: break-word;
+        overflow-wrap: break-word;
+        display: inline;
+        min-width: 1px;
+        max-width: 100%; /* 限制最大宽度 */
+        caret-color: transparent; /* 隐藏系统光标 */
+        border: none; /* 移除边框 */
+    }
+
+    /* 移除聚焦时的所有边框效果 */
+    :global(.terminal-input:focus),
+    :global(.terminal-input:focus-visible),
+    :global(.terminal-input:focus-within) {
+        outline: none;
+        border: none;
+        box-shadow: none;
+    }
+
+    :global(.terminal-input:empty)::before {
+        content: "";
+        display: inline-block;
+        width: 0;
+    }
+
+    /* 自动补全建议 */
+    :global(.suggestion) {
+        color: var(--color-text-secondary);
+        opacity: 0.4;
+        font-family: var(--font-mono);
+        font-size: 0.9375rem;
+        pointer-events: none;
+        user-select: none;
+    }
+
+    /* 光标 */
+    :global(.cursor) {
+        display: inline-block;
+        color: var(--color-text);
+        animation: blink 1s step-end infinite;
+        font-weight: 400;
+        margin-left: 0;
+    }
+
+    @keyframes blink {
+        0%,
+        49% {
+            opacity: 1;
+        }
+        50%,
+        100% {
+            opacity: 0;
+        }
+    }
+
+    /* 滚动条样式 */
+    .terminal-body::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .terminal-body::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .terminal-body::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+    }
+
+    :global([data-theme="light"]) .terminal-body::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.2);
+    }
+
+    .terminal-body::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+    }
+
+    :global([data-theme="light"])
+        .terminal-body::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 0, 0, 0.3);
+    }
+
+    /* 响应式 */
+    @media (max-width: 640px) {
+        .terminal-body {
+            font-size: 0.8125rem;
+            padding: 10px 12px; /* 移动端更小的 padding */
+        }
+
+        :global(.terminal-input) {
+            font-size: 0.8125rem;
+        }
+
+        :global(.suggestion) {
+            font-size: 0.8125rem;
+        }
+    }
+</style>

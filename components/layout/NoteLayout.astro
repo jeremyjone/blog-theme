@@ -1,0 +1,530 @@
+---
+import BaseLayout from "./BaseLayout.astro";
+import type { CollectionEntry } from "astro:content";
+import { formatDate } from "../../lib/date";
+import { getTopicDisplayName, getTopicConfig } from "@config/topics";
+import { Icon } from "astro-icon/components";
+
+interface Props {
+  notes: CollectionEntry<"notes">[];
+  topic: string;
+}
+
+const { notes, topic } = Astro.props;
+
+// Helper function to get display name
+const getDisplayName = (note: CollectionEntry<"notes">) => {
+  if (note.data.title) return note.data.title;
+  const slugParts = note.slug.split("/");
+  return slugParts[slugParts.length - 1];
+};
+
+// Helper function to get note ID (last part of slug)
+const getNoteId = (slug: string) => {
+  const slugParts = slug.split("/");
+  return slugParts[slugParts.length - 1];
+};
+
+// Render all notes
+const renderedNotes = await Promise.all(
+  notes.map(async note => {
+    const { Content } = await note.render();
+    return { note, Content };
+  })
+);
+
+// Parse topic display name
+const topicDisplayName = getTopicDisplayName(topic);
+const topicIcon = getTopicConfig(topic).icon;
+---
+
+<BaseLayout
+  title={`笔记 - ${topicDisplayName}`}
+  description={`关于 ${topicDisplayName} 的笔记集合`}
+>
+  <div class="notes-detail-container">
+    <!-- Left Sidebar TOC -->
+    <aside class="notes-toc">
+      <div class="toc-header">
+        <a href="/notes" class="back-button" aria-label="返回笔记列表页">
+          <Icon name="mdi:arrow-left" class="back-icon" />
+          <span>返回笔记列表</span>
+        </a>
+        <h3>
+          <Icon name={topicIcon} class="topic-icon" />
+          <span>{topicDisplayName}</span>
+        </h3>
+        <p class="toc-count">{notes.length} 篇笔记</p>
+      </div>
+      <nav class="toc-list">
+        {
+          renderedNotes.map(({ note }) => (
+            <a
+              href={`#${getNoteId(note.slug)}`}
+              class="toc-item"
+              data-note-id={getNoteId(note.slug)}
+            >
+              <div class="toc-item-header">
+                <span class="toc-title">{getDisplayName(note)}</span>
+              </div>
+            </a>
+          ))
+        }
+      </nav>
+    </aside>
+    <div class="sidebar-overlay"></div>
+
+    <!-- Main Content -->
+    <main
+      class="notes-content"
+      data-pagefind-body
+      data-pagefind-filter="type:note"
+    >
+      {
+        renderedNotes.map(({ note, Content }) => (
+          <article class="note-article" id={getNoteId(note.slug)}>
+            <header class="note-header">
+              <h2 class="note-title">{getDisplayName(note)}</h2>
+              <div class="note-meta">
+                <span class="note-importance">
+                  {"🔥".repeat(note.data.importance || 3)}
+                </span>
+                <span class="note-date">{formatDate(note.data.date)}</span>
+                {note.data.tags.length > 0 && (
+                  <div class="note-tags">
+                    {note.data.tags.map(tag => (
+                      <span class="note-tag">#{tag}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </header>
+            <div class="note-body">
+              <Content />
+            </div>
+            <footer class="note-footer" />
+          </article>
+        ))
+      }
+    </main>
+  </div>
+</BaseLayout>
+
+<style>
+  .notes-detail-container {
+    position: relative;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 1rem;
+  }
+
+  .notes-toc {
+    position: fixed;
+    top: 96px;
+    left: calc(50% - 500px - 80px);
+    height: fit-content;
+    max-height: calc(100vh - 8rem);
+    overflow-y: auto;
+    padding: 1.5rem;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    /* New styles for hover expansion */
+    width: 80px;
+    transition:
+      width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.3s ease;
+    z-index: 50;
+  }
+
+  .notes-toc:hover {
+    width: 360px;
+    box-shadow:
+      0 10px 25px -5px rgba(0, 0, 0, 0.1),
+      0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  }
+
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 40;
+  }
+
+  .notes-toc:hover ~ .sidebar-overlay {
+    opacity: 1;
+  }
+
+  .back-button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    color: var(--color-text);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+  }
+
+  .back-icon {
+    border-radius: 50%;
+    padding: 0.1rem;
+    background-color: var(--color-bg);
+    width: 1.25rem;
+    height: 1.25rem;
+    animation: move-left 4s ease infinite;
+    transition: all 0.5s ease;
+  }
+
+  @keyframes move-left {
+    0% {
+      transform: translateX(0);
+    }
+    10% {
+      transform: translateX(-2px);
+    }
+    20% {
+      transform: translateX(0);
+    }
+    30% {
+      transform: translateX(-2px);
+    }
+    40% {
+      transform: translateX(0);
+    }
+  }
+
+  .back-button span {
+    width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: all 0.5s ease;
+  }
+
+  .back-button span::before {
+    content: "";
+    display: inline-block;
+    width: 0.5rem;
+  }
+
+  .back-button:hover {
+    color: var(--color-primary);
+    transform: translateX(-2px);
+  }
+
+  .back-button:hover .back-icon {
+    animation: none;
+    background-color: transparent;
+    padding: 0;
+  }
+
+  .back-button:hover span {
+    width: 100%;
+  }
+
+  .notes-toc::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .notes-toc::-webkit-scrollbar-thumb {
+    background-color: var(--color-border);
+    border-radius: 4px;
+  }
+
+  .toc-header h3 {
+    font-size: 1.2rem;
+    margin: 0 0 0.5rem 0;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .toc-header h3 span {
+    display: inline-block;
+    width: 0;
+    opacity: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: all 0.5s;
+  }
+
+  .toc-header h3 svg {
+    flex-shrink: 0;
+  }
+
+  .notes-toc:hover h3 span {
+    width: auto;
+    opacity: 1;
+  }
+
+  .topic-icon {
+    color: var(--color-primary);
+  }
+
+  .toc-count {
+    font-size: 0.85rem;
+    color: var(--color-bg-secondary);
+    margin: 0 0 1rem 0;
+    white-space: nowrap;
+    transition: color 0.2s;
+  }
+
+  .notes-toc:hover .toc-count {
+    color: var(--color-text-secondary);
+  }
+
+  .toc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .toc-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    text-decoration: none;
+    color: var(--color-text);
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    border-left: 2px solid transparent;
+  }
+
+  .toc-item:hover {
+    background: var(--color-bg);
+    border-left-color: var(--color-primary);
+  }
+
+  .toc-item.active {
+    background: rgba(var(--color-primary-rgb, 59, 130, 246), 0.1);
+    border-left-color: var(--color-primary);
+    color: var(--color-primary);
+    font-weight: 500;
+  }
+
+  .toc-item-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .toc-item-header .toc-title {
+    order: -1;
+  }
+
+  .toc-importance {
+    font-size: 0.7rem;
+    line-height: 1.2;
+  }
+
+  .toc-title {
+    line-height: 1.4;
+    /* Truncate text by default */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+
+  .notes-toc:hover .toc-title {
+    /* Show full text on hover */
+    overflow: visible;
+  }
+
+  /* Main Content */
+  .notes-content {
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
+  }
+
+  .note-article {
+    padding: 2rem;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    scroll-margin-top: 6rem;
+  }
+
+  .note-header {
+    border-bottom: 2px solid var(--color-border);
+    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .note-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 0.75rem 0;
+    color: var(--color-text);
+  }
+
+  .note-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.9rem;
+    color: var(--color-text-secondary);
+  }
+
+  .note-importance {
+    font-size: 0.85rem;
+  }
+
+  .note-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .note-tag {
+    font-size: 0.85rem;
+    color: var(--color-primary);
+  }
+
+  .note-body {
+    line-height: 1.8;
+    color: var(--color-text);
+  }
+
+  .note-body :global(h1) {
+    display: none;
+  }
+
+  .note-body :global(h2),
+  .note-body :global(h3) {
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--color-text);
+  }
+
+  .note-body :global(li) {
+    margin: 0.5rem 0;
+  }
+
+  .note-body :global(code) {
+    background: var(--color-bg);
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.9em;
+    font-family: "Consolas", "Monaco", monospace;
+  }
+
+  .note-body :global(pre) {
+    background: var(--color-bg);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+  }
+
+  .note-body :global(pre code) {
+    background: none;
+    padding: 0;
+  }
+
+  .note-body :global(blockquote) {
+    border-left: 3px solid var(--color-primary);
+    padding-left: 1rem;
+    margin: 1rem 0;
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+
+  .note-footer {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  /* Responsive */
+  @media (max-width: 1200px) {
+    .notes-toc {
+      display: none;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .notes-detail-container {
+      padding: 1rem 0.5rem;
+    }
+
+    .note-article {
+      padding: 1.5rem;
+    }
+
+    .note-title {
+      font-size: 1.25rem;
+    }
+
+    .notes-toc {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // Smooth scroll for TOC links
+    document.querySelectorAll(".toc-item").forEach(link => {
+      link.addEventListener("click", e => {
+        e.preventDefault();
+        const targetId = link.getAttribute("href")?.slice(1);
+        const targetElement = document.getElementById(targetId || "");
+
+        if (targetElement) {
+          targetElement.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+          });
+
+          // Update URL without page jump
+          history.pushState(null, "", `#${targetId}`);
+        }
+      });
+    });
+
+    // Highlight active TOC item on scroll
+    const observerOptions = {
+      root: null,
+      rootMargin: "-20% 0px -70% 0px",
+      threshold: 0
+    };
+
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+
+          // Remove active class from all
+          document.querySelectorAll(".toc-item").forEach(item => {
+            item.classList.remove("active");
+          });
+
+          // Add active class to current
+          const activeLink = document.querySelector(
+            `.toc-item[data-note-id="${id}"]`
+          );
+          if (activeLink) {
+            activeLink.classList.add("active");
+          }
+        }
+      });
+    }, observerOptions);
+
+    // Observe all note articles
+    document.querySelectorAll(".note-article").forEach(article => {
+      observer.observe(article);
+    });
+  });
+</script>

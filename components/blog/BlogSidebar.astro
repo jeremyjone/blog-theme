@@ -1,0 +1,257 @@
+---
+import { Icon } from "astro-icon/components";
+
+interface Props {
+    tags: { name: string; count: number }[];
+    categories?: { name: string; count: number }[];
+    archives?: { year: number; count: number }[];
+}
+
+const { tags, categories = [], archives = [] } = Astro.props;
+---
+
+<aside class="blog-sidebar">
+    {
+        categories.length > 0 && (
+            <div class="sidebar-widget categories-widget">
+                <button class="widget-header" aria-expanded="true">
+                    <h3>分类</h3>
+                    <Icon name="mdi:chevron-down" class="toggle-icon" />
+                </button>
+                <div class="widget-content">
+                    <ul class="widget-list">
+                        {categories.map(cat => (
+                            <li>
+                                <a
+                                    href={`/category/${cat.name}`}
+                                    class="widget-link"
+                                >
+                                    <span class="name">{cat.name}</span>
+                                    <span class="count">{cat.count}</span>
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            </div>
+        )
+    }
+
+    <div class="sidebar-widget tags-widget">
+        <button class="widget-header" aria-expanded="true">
+            <h3>热门标签</h3>
+            <Icon name="mdi:chevron-down" class="toggle-icon" />
+        </button>
+        <div class="widget-content">
+            <div class="tags-cloud">
+                {
+                    tags.map(tag => (
+                        <a href={`/tags/${tag.name}`} class="tag-link">
+                            {tag.name}{" "}
+                            <span class="tag-count">({tag.count})</span>
+                        </a>
+                    ))
+                }
+            </div>
+        </div>
+    </div>
+
+    {
+        archives.length > 0 && (
+            <div class="sidebar-widget archives-widget">
+                <button class="widget-header" aria-expanded="true">
+                    <h3>归档</h3>
+                    <Icon name="mdi:chevron-down" class="toggle-icon" />
+                </button>
+                <div class="widget-content">
+                    <ul class="widget-list">
+                        {archives.map(arch => (
+                            <li>
+                                <a
+                                    href={`/archives/${arch.year}`}
+                                    class="widget-link"
+                                >
+                                    <span class="name">{arch.year} 年</span>
+                                    <span class="count">{arch.count}</span>
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            </div>
+        )
+    }
+</aside>
+
+<script>
+    // Toggle widget content
+    const widgets = document.querySelectorAll(".sidebar-widget");
+    widgets.forEach(widget => {
+        const header = widget.querySelector(".widget-header");
+        const content = widget.querySelector(".widget-content");
+        const icon = widget.querySelector(".toggle-icon");
+
+        if (header && content && icon) {
+            header.addEventListener("click", () => {
+                const isExpanded =
+                    header.getAttribute("aria-expanded") === "true";
+                header.setAttribute("aria-expanded", (!isExpanded).toString());
+
+                if (isExpanded) {
+                    (content as HTMLElement).style.maxHeight = "0px";
+                    icon.classList.add("collapsed");
+                } else {
+                    (content as HTMLElement).style.maxHeight =
+                        (content as HTMLElement).scrollHeight + "px";
+                    icon.classList.remove("collapsed");
+                }
+            });
+
+            // Set initial height for transition
+            (content as HTMLElement).style.maxHeight =
+                (content as HTMLElement).scrollHeight + "px";
+        }
+    });
+</script>
+
+<style>
+    .blog-sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        position: sticky;
+        top: calc(var(--header-height) + 1rem);
+        height: fit-content;
+        max-height: calc(100vh - var(--header-height) - 3rem);
+        overflow-y: auto;
+        padding-right: 0.5rem;
+    }
+
+    /* Custom Scrollbar for sidebar */
+    .blog-sidebar::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    .blog-sidebar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .blog-sidebar::-webkit-scrollbar-thumb {
+        background-color: var(--color-border);
+        border-radius: 4px;
+    }
+
+    .sidebar-widget {
+        border-bottom: 1px solid var(--color-border);
+        padding-bottom: 1rem;
+    }
+
+    .sidebar-widget:last-child {
+        border-bottom: none;
+    }
+
+    .widget-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        background: none;
+        border: none;
+        padding: 0.5rem 0;
+        cursor: pointer;
+        color: var(--color-text);
+    }
+
+    .widget-header h3 {
+        font-size: 1.2rem;
+        margin: 0;
+        font-weight: 600;
+    }
+
+    .toggle-icon {
+        font-size: 1.5rem;
+        transition: transform 0.3s ease;
+    }
+
+    .toggle-icon.collapsed {
+        transform: rotate(-90deg);
+    }
+
+    .widget-content {
+        overflow: hidden;
+        transition: max-height 0.3s ease-out;
+    }
+
+    .widget-list {
+        list-style: none;
+        padding: 0.5rem 0 0 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .widget-link {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.4rem 0.5rem;
+        text-decoration: none;
+        color: var(--color-text);
+        border-radius: 0.5rem;
+        transition: background-color 0.2s;
+    }
+
+    .widget-link:hover {
+        background-color: var(--color-bg-secondary);
+        color: var(--color-primary);
+    }
+
+    .widget-link .count {
+        background: var(--color-bg-secondary);
+        padding: 0.1rem 0.4rem;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        color: var(--color-text-secondary);
+        min-width: 1.5rem;
+        text-align: center;
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        height: 1.5rem;
+        line-height: 1;
+    }
+
+    .widget-link:hover .count {
+        background: var(--color-bg);
+    }
+
+    .tags-cloud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        padding-top: 0.5rem;
+    }
+
+    .tag-link {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        background: var(--color-bg-secondary);
+        border-radius: 1rem;
+        font-size: 0.9rem;
+        text-decoration: none;
+        color: var(--color-text);
+        transition: all 0.2s ease;
+    }
+
+    .tag-link:hover {
+        background: var(--color-primary);
+        color: white;
+        transform: translateY(-2px);
+    }
+
+    .tag-count {
+        font-size: 0.8em;
+        opacity: 0.8;
+    }
+</style>

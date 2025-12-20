@@ -1,0 +1,223 @@
+---
+// Astro TOC 组件 - 自动提取文章标题生成目录
+---
+
+<nav class="toc-nav" id="toc-nav">
+    <!-- TOC 内容将由客户端脚本填充 -->
+</nav>
+
+<style>
+    .toc-nav {
+        font-size: 0.9rem;
+    }
+
+    .toc-nav :global(ul) {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .toc-nav :global(li) {
+        margin: 0;
+        padding: 0;
+    }
+
+    .toc-nav :global(a) {
+        display: block;
+        padding: 0.5rem 0.75rem;
+        color: var(--color-text-secondary);
+        text-decoration: none;
+        border-left: 2px solid transparent;
+        transition: all 0.2s;
+        line-height: 1.4;
+        word-break: break-word;
+    }
+
+    .toc-nav :global(a:hover) {
+        color: var(--color-text);
+        background: var(--color-bg);
+        border-left-color: var(--color-primary);
+    }
+
+    .toc-nav :global(a.active) {
+        color: var(--color-primary);
+        background: var(--color-bg);
+        border-left-color: var(--color-primary);
+        font-weight: 500;
+    }
+
+    .toc-nav :global(.toc-h2) {
+        padding-left: 0.75rem;
+        font-weight: 600;
+    }
+
+    .toc-nav :global(.toc-h3) {
+        padding-left: 1.5rem;
+        font-size: 0.85rem;
+    }
+
+    .toc-nav :global(.toc-h4) {
+        padding-left: 2.25rem;
+        font-size: 0.8rem;
+    }
+
+    .toc-nav :global(.toc-h5) {
+        padding-left: 3rem;
+        font-size: 0.75rem;
+    }
+
+    .toc-nav :global(.toc-h6) {
+        padding-left: 3.75rem;
+        font-size: 0.7rem;
+        opacity: 0.8;
+    }
+</style>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const tocNav = document.getElementById("toc-nav");
+        const tocHeader = document.querySelector(".toc-header h3");
+        if (!tocNav) return;
+
+        // 提取文章标题（页面级 h1）
+        const pageTitle = document.querySelector(".article-header h1");
+        const pageTitleText = pageTitle?.textContent || "目录";
+
+        // 更新 TOC 标题
+        if (tocHeader) {
+            tocHeader.textContent = pageTitleText;
+        }
+
+        // 提取文章中的所有标题（h2-h6），忽略 h1
+        const headings = Array.from(
+            document.querySelectorAll(
+                ".article-content h2, .article-content h3, .article-content h4, .article-content h5, .article-content h6"
+            )
+        );
+
+        if (headings.length === 0) {
+            tocNav.innerHTML =
+                '<p style="color: var(--color-text-secondary); padding: 0.5rem;">暂无目录</p>';
+            return;
+        }
+
+        // 为没有 id 的标题生成 id
+        headings.forEach(heading => {
+            if (!heading.id) {
+                heading.id =
+                    heading.textContent
+                        ?.toLowerCase()
+                        .replace(/\s+/g, "-")
+                        .replace(/[^\w\-\u4e00-\u9fa5]/g, "") || "";
+            }
+        });
+
+        // 生成 TOC HTML
+        const ul = document.createElement("ul");
+        headings.forEach(heading => {
+            const li = document.createElement("li");
+            const a = document.createElement("a");
+            a.href = `#${heading.id}`;
+            a.textContent = heading.textContent || "";
+            a.classList.add(`toc-${heading.tagName.toLowerCase()}`);
+
+            // 平滑滚动
+            a.addEventListener("click", e => {
+                e.preventDefault();
+                const target = document.getElementById(heading.id);
+                if (target) {
+                    // 计算偏移量（header 高度 + 缓冲）
+                    const headerHeight = 80; // 64px header + 16px buffer
+                    const elementPosition = target.getBoundingClientRect().top;
+                    const offsetPosition =
+                        elementPosition + window.pageYOffset - headerHeight;
+
+                    window.scrollTo({
+                        top: offsetPosition,
+                        behavior: "smooth"
+                    });
+                    history.pushState(null, "", `#${heading.id}`);
+                }
+            });
+
+            li.appendChild(a);
+            ul.appendChild(li);
+        });
+
+        tocNav.appendChild(ul);
+
+        // IntersectionObserver 监听滚动高亮
+        const observerOptions = {
+            root: null,
+            rootMargin: "-60px 0px -80% 0px",
+            threshold: 0
+        };
+
+        const observer = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.id;
+                    // 移除所有 active
+                    tocNav.querySelectorAll("a").forEach(link => {
+                        link.classList.remove("active");
+                    });
+                    // 添加当前 active
+                    const activeLink = tocNav.querySelector(`a[href="#${id}"]`);
+                    if (activeLink) {
+                        activeLink.classList.add("active");
+                    }
+                }
+            });
+        }, observerOptions);
+
+        headings.forEach(heading => observer.observe(heading));
+
+        // 初始化高亮：处理页面加载时的状态
+        const updateInitialHighlight = () => {
+            // 1. 如果 URL 有 hash，优先高亮对应项
+            if (window.location.hash) {
+                const activeLink = tocNav.querySelector(
+                    `a[href="${window.location.hash}"]`
+                );
+                if (activeLink) {
+                    tocNav
+                        .querySelectorAll("a")
+                        .forEach(l => l.classList.remove("active"));
+                    activeLink.classList.add("active");
+                    return;
+                }
+            }
+
+            // 2. 否则，找到当前应该高亮的标题
+            let activeId = "";
+            // 找到最后一个“已经滚过去”或“就在眼前”的标题
+            for (const heading of headings) {
+                const rect = heading.getBoundingClientRect();
+                // 150px 大约是 header 高度 + 一些缓冲
+                // 如果标题的顶部在视口上方，或者刚刚进入视口顶部区域
+                if (rect.top <= 150) {
+                    activeId = heading.id;
+                } else {
+                    // 因为标题是顺序排列的，一旦遇到一个在下方的，后面的肯定也在下方
+                    break;
+                }
+            }
+
+            // 3. 特殊情况：如果页面在顶部，且没有找到 activeId（说明第一个标题也在 150px 下方），默认高亮第一个
+            if (!activeId && headings.length > 0 && window.scrollY < 100) {
+                activeId = headings[0].id;
+            }
+
+            if (activeId) {
+                tocNav
+                    .querySelectorAll("a")
+                    .forEach(l => l.classList.remove("active"));
+                const link = tocNav.querySelector(`a[href="#${activeId}"]`);
+                if (link) link.classList.add("active");
+            }
+        };
+
+        // 延迟执行以确保布局稳定
+        setTimeout(updateInitialHighlight, 100);
+    });
+</script>

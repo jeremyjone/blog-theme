@@ -1,0 +1,38 @@
+---
+/**
+ * 使用 Giscus 评论组件。
+ * 需要你在 https://giscus.app 上生成以下参数：
+ * - repo: "owner/repo"
+ * - repoId
+ * - category
+ * - categoryId
+ * 替换下方占位字符串。
+ */
+interface Props {
+  mapping?: string;
+  term?: string;
+}
+
+import { siteConfig } from "@config/site";
+const { mapping = "url", term = "" } = Astro.props;
+---
+
+<div class="giscus-wrapper">
+  <script
+    src="https://giscus.app/client.js"
+    data-repo={siteConfig.giscus.repo}
+    data-repo-id={siteConfig.giscus.repoId}
+    data-category={siteConfig.giscus.category}
+    data-category-id={siteConfig.giscus.categoryId}
+    data-mapping={mapping}
+    data-term={term}
+    data-strict="0"
+    data-reactions-enabled="1"
+    data-emit-metadata="0"
+    data-input-position="top"
+    data-theme="preferred_color_scheme"
+    data-lang="zh-CN"
+    crossorigin="anonymous"
+    async></script>
+  <noscript>请启用 JavaScript 查看评论。</noscript>
+</div>

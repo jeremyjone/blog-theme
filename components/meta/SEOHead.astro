@@ -1,0 +1,16 @@
+---
+import { siteConfig } from "@config/site";
+const { title, description } = Astro.props;
+const site = Astro.site?.toString() || siteConfig.url;
+---
+
+<title>{title}</title>
+<meta name="description" content={description} />
+<link rel="canonical" href={site + Astro.url.pathname} />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:type" content="article" />
+<meta property="og:url" content={site + Astro.url.pathname} />
+<meta property="og:site_name" content={siteConfig.title} />
+<meta property="og:locale" content="zh_CN" />
+<link rel="icon" href="/favicon.ico" />

@@ -1,0 +1,121 @@
+---
+import type { CollectionEntry } from "astro:content";
+import { formatDate } from "../../lib/date";
+
+interface Props {
+  note: CollectionEntry<"notes">;
+}
+
+const { note } = Astro.props;
+const slug = note.slug;
+const importance = note.data.importance || 3;
+
+// Display priority: title > last part of slug > full slug
+const getDisplayName = () => {
+  if (note.data.title) return note.data.title;
+  const slugParts = slug.split("/");
+  return slugParts[slugParts.length - 1]; // e.g., "centering" from "frontend/css/centering"
+};
+const displayName = getDisplayName();
+
+// For hierarchical topics (e.g., "frontend/css"), link to the specific topic page
+const topic = note.data.topic;
+const noteId = slug.split("/").pop();
+---
+
+<a
+  href={`/notes/${topic}#${noteId}`}
+  class="note-card"
+  data-importance={importance}
+>
+  <div class="note-header">
+    <h4 class="note-title">{displayName}</h4>
+    <span class="note-importance">{"🔥".repeat(importance)}</span>
+  </div>
+  <div class="note-meta">
+    <span class="note-date">{formatDate(note.data.date)}</span>
+    {
+      note.data.tags.length > 0 && (
+        <div class="note-tags">
+          {note.data.tags.map(tag => (
+            <span class="note-tag">#{tag}</span>
+          ))}
+        </div>
+      )
+    }
+  </div>
+</a>
+
+<style>
+  .note-card {
+    display: block;
+    padding: 0.5rem 0.75rem;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s ease;
+  }
+
+  .note-card:hover {
+    border-left-color: var(--color-primary);
+    background: var(--color-bg);
+    transform: translateX(2px);
+  }
+
+  .note-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .note-title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin: 0;
+    color: var(--color-text);
+    flex: 1;
+  }
+
+  .note-card:hover .note-title {
+    color: var(--color-primary);
+  }
+
+  .note-importance {
+    font-size: 0.7rem;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .note-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+  }
+
+  .note-date {
+    white-space: nowrap;
+  }
+
+  .note-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .note-tag {
+    font-size: 0.7rem;
+    color: var(--color-text-secondary);
+  }
+
+  .note-tag:hover {
+    color: var(--color-primary);
+  }
+</style>
