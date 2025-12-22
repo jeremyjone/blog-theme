@@ -474,12 +474,16 @@ const topicIcon = getTopicConfig(topic).icon;
 </style>
 
 <script>
-  document.addEventListener("DOMContentLoaded", () => {
+  function initNoteLayout() {
     // Smooth scroll for TOC links
     document.querySelectorAll(".toc-item").forEach(link => {
-      link.addEventListener("click", e => {
+      // 移除旧的监听器
+      const newLink = link.cloneNode(true);
+      link.parentNode?.replaceChild(newLink, link);
+
+      newLink.addEventListener("click", e => {
         e.preventDefault();
-        const targetId = link.getAttribute("href")?.slice(1);
+        const targetId = newLink.getAttribute("href")?.slice(1);
         const targetElement = document.getElementById(targetId || "");
 
         if (targetElement) {
@@ -526,5 +530,11 @@ const topicIcon = getTopicConfig(topic).icon;
     document.querySelectorAll(".note-article").forEach(article => {
       observer.observe(article);
     });
-  });
+  }
+
+  // 初始化
+  initNoteLayout();
+
+  // View Transitions 重新加载
+  document.addEventListener("astro:page-load", initNoteLayout);
 </script>

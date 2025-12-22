@@ -56,6 +56,30 @@
   --color-shadow: rgba(0, 0, 0, 0.5);
 }
 
+/* View Transitions 进度条样式 */
+::view-transition-group(root) {
+  animation-duration: 0.3s;
+}
+
+/* Astro 默认的加载条样式覆盖 */
+/* 注意：Astro 3.0+ 的加载条是一个伪元素，通常很难直接选中修改颜色。
+   如果需要非常明显的加载条，建议使用 nprogress 方案。
+   但我们可以尝试给 html 添加一个加载状态 */
+
+html.astro-loading {
+  cursor: wait;
+}
+
+/* NProgress 自定义样式 */
+#nprogress .bar {
+  background: var(--color-primary) !important;
+  height: 3px !important;
+}
+
+#nprogress .peg {
+  box-shadow: 0 0 10px var(--color-primary), 0 0 5px var(--color-primary) !important;
+}
+
 /* ========================================
    全局重置和基础样式
    ======================================== */

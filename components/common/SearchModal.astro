@@ -188,19 +188,11 @@
 <script>
     import { getPlatform, debounce } from "../../lib/utils";
 
-    const modal = document.getElementById("search-modal");
-    const input = document.getElementById(
-        "search-input-global"
-    ) as HTMLInputElement;
-    const closeBtn = document.getElementById("close-search");
-    const overlay = document.querySelector(".search-overlay");
-    const resultsContainer = document.getElementById("search-results-global");
-
-    // Detect OS for shortcut hint
-    const shortcut = getPlatform() === "mac" ? "Cmd+K" : "Ctrl+K";
-    if (input) {
-        input.placeholder = `搜索全站内容 (${shortcut})...`;
-    }
+    let modal: HTMLElement | null;
+    let input: HTMLInputElement | null;
+    let closeBtn: HTMLElement | null;
+    let overlay: HTMLElement | null;
+    let resultsContainer: HTMLElement | null;
 
     // 配置搜索分类
     // key: 对应 data-pagefind-filter="type:..." 的值
@@ -224,20 +216,13 @@
         if (modal) modal.style.display = "none";
     }
 
-    // Event Listeners
-    window.addEventListener("keydown", e => {
+    function handleKeydown(e: KeyboardEvent) {
         if ((e.metaKey || e.ctrlKey) && e.key === "k") {
             e.preventDefault();
             openSearch();
         }
         if (e.key === "Escape") closeSearch();
-    });
-
-    closeBtn?.addEventListener("click", closeSearch);
-    overlay?.addEventListener("click", closeSearch);
-
-    // Expose open function globally so other buttons can call it
-    (window as any).openSearchModal = openSearch;
+    }
 
     // Pagefind Logic
     async function loadPagefind() {
@@ -334,8 +319,36 @@
     // Debounce input
     const debouncedSearch = debounce((val: string) => performSearch(val), 300);
 
-    input?.addEventListener("input", e => {
-        const val = (e.target as HTMLInputElement).value;
-        debouncedSearch(val);
-    });
+    function init() {
+        modal = document.getElementById("search-modal");
+        input = document.getElementById(
+            "search-input-global"
+        ) as HTMLInputElement;
+        closeBtn = document.getElementById("close-search");
+        overlay = document.querySelector(".search-overlay");
+        resultsContainer = document.getElementById("search-results-global");
+
+        // Detect OS for shortcut hint
+        const shortcut = getPlatform() === "mac" ? "Cmd+K" : "Ctrl+K";
+        if (input) {
+            input.placeholder = `搜索全站内容 (${shortcut})...`;
+        }
+
+        closeBtn?.addEventListener("click", closeSearch);
+        overlay?.addEventListener("click", closeSearch);
+
+        input?.addEventListener("input", e => {
+            const val = (e.target as HTMLInputElement).value;
+            debouncedSearch(val);
+        });
+
+        // Expose open function globally so other buttons can call it
+        (window as any).openSearchModal = openSearch;
+
+        // Clean up and re-add window listener
+        window.removeEventListener("keydown", handleKeydown);
+        window.addEventListener("keydown", handleKeydown);
+    }
+
+    document.addEventListener("astro:page-load", init);
 </script>

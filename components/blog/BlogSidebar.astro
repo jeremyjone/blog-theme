@@ -84,34 +84,51 @@ const { tags, categories = [], archives = [] } = Astro.props;
 </aside>
 
 <script>
-    // Toggle widget content
-    const widgets = document.querySelectorAll(".sidebar-widget");
-    widgets.forEach(widget => {
-        const header = widget.querySelector(".widget-header");
-        const content = widget.querySelector(".widget-content");
-        const icon = widget.querySelector(".toggle-icon");
+    function initSidebar() {
+        const widgets = document.querySelectorAll(".sidebar-widget");
+        widgets.forEach(widget => {
+            const header = widget.querySelector(".widget-header");
+            const content = widget.querySelector(".widget-content");
+            const icon = widget.querySelector(".toggle-icon");
 
-        if (header && content && icon) {
-            header.addEventListener("click", () => {
-                const isExpanded =
-                    header.getAttribute("aria-expanded") === "true";
-                header.setAttribute("aria-expanded", (!isExpanded).toString());
+            if (header && content && icon) {
+                // 移除旧的监听器（如果有的话，防止重复绑定）
+                const newHeader = header.cloneNode(true);
+                header.parentNode?.replaceChild(newHeader, header);
 
-                if (isExpanded) {
-                    (content as HTMLElement).style.maxHeight = "0px";
-                    icon.classList.add("collapsed");
-                } else {
+                newHeader.addEventListener("click", () => {
+                    const isExpanded =
+                        newHeader.getAttribute("aria-expanded") === "true";
+                    newHeader.setAttribute(
+                        "aria-expanded",
+                        (!isExpanded).toString()
+                    );
+
+                    if (isExpanded) {
+                        (content as HTMLElement).style.maxHeight = "0px";
+                        icon.classList.add("collapsed");
+                    } else {
+                        (content as HTMLElement).style.maxHeight =
+                            (content as HTMLElement).scrollHeight + "px";
+                        icon.classList.remove("collapsed");
+                    }
+                });
+
+                // Set initial height for transition
+                // 只有当没有设置过高度时才设置，避免覆盖之前的状态
+                if (!(content as HTMLElement).style.maxHeight) {
                     (content as HTMLElement).style.maxHeight =
                         (content as HTMLElement).scrollHeight + "px";
-                    icon.classList.remove("collapsed");
                 }
-            });
+            }
+        });
+    }
 
-            // Set initial height for transition
-            (content as HTMLElement).style.maxHeight =
-                (content as HTMLElement).scrollHeight + "px";
-        }
-    });
+    // 初始化
+    initSidebar();
+
+    // View Transitions 重新加载
+    document.addEventListener("astro:page-load", initSidebar);
 </script>
 
 <style>

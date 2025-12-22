@@ -74,10 +74,13 @@
 </style>
 
 <script>
-    document.addEventListener("DOMContentLoaded", () => {
+    function initToc() {
         const tocNav = document.getElementById("toc-nav");
         const tocHeader = document.querySelector(".toc-header h3");
         if (!tocNav) return;
+
+        // 清空现有内容，防止重复添加
+        tocNav.innerHTML = "";
 
         // 提取文章标题（页面级 h1）
         const pageTitle = document.querySelector(".article-header h1");
@@ -219,5 +222,11 @@
 
         // 延迟执行以确保布局稳定
         setTimeout(updateInitialHighlight, 100);
-    });
+    }
+
+    // 初始加载
+    initToc();
+
+    // View Transitions 页面切换后重新加载
+    document.addEventListener("astro:page-load", initToc);
 </script>

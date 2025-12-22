@@ -4,16 +4,18 @@ import SEOHead from "../meta/SEOHead.astro";
 import "../../styles/global.css";
 import SearchModal from "../common/SearchModal.astro";
 import { siteConfig } from "@config/site";
+import { ViewTransitions } from "astro:transitions";
 ---
 
 <html lang="zh-CN" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <ViewTransitions />
     <SEOHead title={title} description={description} />
   </head>
   <body>
-    <header class="site-header">
+    <header class="site-header" transition:persist>
       <div class="container header-content">
         <a href="/" class="logo">
           <div class="logo-icon">
@@ -25,18 +27,7 @@ import { siteConfig } from "@config/site";
           <nav class="nav">
             {
               siteConfig.nav.map(item => (
-                <a
-                  href={item.href}
-                  class:list={[
-                    "nav-link",
-                    {
-                      active:
-                        Astro.url.pathname === item.href ||
-                        (item.href !== "/" &&
-                          Astro.url.pathname.startsWith(item.href))
-                    }
-                  ]}
-                >
+                <a href={item.href} class="nav-link" data-href={item.href}>
                   {item.name}
                 </a>
               ))
@@ -123,28 +114,62 @@ import { siteConfig } from "@config/site";
 
     <script>
       import { getPlatform } from "@theme/lib/utils";
+      import NProgress from "nprogress";
+      import "nprogress/nprogress.css";
 
-      // 主题切换
-      const toggle = document.getElementById("theme-toggle");
-      const html = document.documentElement;
+      NProgress.configure({ showSpinner: false });
 
-      // 初始化主题
-      const savedTheme = localStorage.getItem("theme") || "dark";
-      html.setAttribute("data-theme", savedTheme);
-
-      toggle?.addEventListener("click", () => {
-        const currentTheme = html.getAttribute("data-theme");
-        const newTheme = currentTheme === "dark" ? "light" : "dark";
-        html.setAttribute("data-theme", newTheme);
-        localStorage.setItem("theme", newTheme);
+      document.addEventListener("astro:before-preparation", () => {
+        NProgress.start();
       });
 
-      // 搜索快捷键提示
-      const searchPlaceholder = document.querySelector(".search-placeholder");
-      if (searchPlaceholder) {
-        searchPlaceholder.textContent =
-          getPlatform() === "mac" ? "Cmd+K 搜索..." : "Ctrl+K 搜索...";
-      }
+      document.addEventListener("astro:after-swap", () => {
+        // 可以在这里处理一些 DOM 恢复工作
+      });
+
+      document.addEventListener("astro:page-load", () => {
+        NProgress.done();
+
+        // 更新导航栏高亮
+        const currentPath = window.location.pathname;
+        const navLinks = document.querySelectorAll(".nav-link");
+        navLinks.forEach(link => {
+          const href = link.getAttribute("data-href");
+          link.classList.remove("active");
+          if (
+            href &&
+            (href === currentPath ||
+              (href !== "/" && currentPath.startsWith(href)))
+          ) {
+            link.classList.add("active");
+          }
+        });
+
+        // 主题切换
+        const toggle = document.getElementById("theme-toggle");
+        const html = document.documentElement;
+
+        // 初始化主题
+        const savedTheme = localStorage.getItem("theme") || "dark";
+        // 只有当属性不存在时才设置，避免覆盖
+        if (!html.hasAttribute("data-theme")) {
+          html.setAttribute("data-theme", savedTheme);
+        }
+
+        toggle?.addEventListener("click", () => {
+          const currentTheme = html.getAttribute("data-theme");
+          const newTheme = currentTheme === "dark" ? "light" : "dark";
+          html.setAttribute("data-theme", newTheme);
+          localStorage.setItem("theme", newTheme);
+        });
+
+        // 搜索快捷键提示
+        const searchPlaceholder = document.querySelector(".search-placeholder");
+        if (searchPlaceholder) {
+          searchPlaceholder.textContent =
+            getPlatform() === "mac" ? "Cmd+K 搜索..." : "Ctrl+K 搜索...";
+        }
+      });
     </script>
     <SearchModal />
   </body>

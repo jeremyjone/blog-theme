@@ -59,6 +59,8 @@ import { siteConfig } from "@config/site";
     let commandHistory: string[] = [];
     let historyIndex = -1;
     let isAutoTyping = false;
+    let shouldStopExecution = false;
+    let executedAutoCommandsCount = 0;
 
     // 执行命令
     function executeCommand(input: string): string {
@@ -453,8 +455,10 @@ import { siteConfig } from "@config/site";
     ): Promise<void> {
         // 自动键入前，先等待一段时间
         await new Promise(resolve => setTimeout(resolve, 1000));
+        if (shouldStopExecution) return;
 
         for (let i = 0; i < command.length; i++) {
+            if (shouldStopExecution) return;
             textSpan.textContent += command[i];
             scrollToBottom(); // 每次打字后滚动
             await new Promise(resolve => setTimeout(resolve, 150));
@@ -464,11 +468,92 @@ import { siteConfig } from "@config/site";
         await new Promise(resolve => setTimeout(resolve, 500));
     }
 
+    // 缓存键
+    const CACHE_KEY = "terminal-history-cache";
+
+    // 保存终端状态到 SessionStorage
+    function saveTerminalState() {
+        const terminalContent = document.getElementById("terminal-content");
+        if (!terminalContent) return;
+
+        // 移除输入行和光标，只保存历史记录
+        const contentClone = terminalContent.cloneNode(true) as HTMLElement;
+        const inputLine = contentClone.querySelector(".input-line");
+        if (inputLine) inputLine.remove();
+
+        // 移除所有光标
+        const cursors = contentClone.querySelectorAll(".cursor");
+        cursors.forEach(cursor => cursor.remove());
+
+        // 如果正在自动打字，移除最后一行（未完成的命令）
+        if (isAutoTyping) {
+            const lastLine = contentClone.lastElementChild;
+            if (lastLine && lastLine.classList.contains("command")) {
+                lastLine.remove();
+            }
+        }
+
+        sessionStorage.setItem(
+            CACHE_KEY,
+            JSON.stringify({
+                html: contentClone.innerHTML,
+                history: commandHistory,
+                autoCmdCount: executedAutoCommandsCount
+            })
+        );
+    }
+
+    // 恢复终端状态
+    function restoreTerminalState(): boolean {
+        const cached = sessionStorage.getItem(CACHE_KEY);
+        if (!cached) return false;
+
+        try {
+            const { html, history, autoCmdCount } = JSON.parse(cached);
+            const terminalContent = document.getElementById("terminal-content");
+            if (!terminalContent) return false;
+
+            terminalContent.innerHTML = html;
+            commandHistory = history || [];
+            historyIndex = commandHistory.length;
+            executedAutoCommandsCount = autoCmdCount || 0;
+
+            // 恢复成功后，立即清除缓存
+            // 这样如果用户刷新页面（而不是通过 View Transitions 跳转回来），
+            // 缓存已经不存在了，就会重新开始演示。
+            sessionStorage.removeItem(CACHE_KEY);
+
+            return true;
+        } catch (e) {
+            console.error("Failed to restore terminal state", e);
+            return false;
+        }
+    }
+
     // 初始化自动演示
     async function initAutoDemo() {
+        const terminalContent = document.getElementById("terminal-content");
+        if (!terminalContent) return;
+
+        // 尝试恢复状态
+        const restored = restoreTerminalState();
+
+        // 如果没有恢复状态，清空内容
+        if (!restored) {
+            terminalContent.innerHTML = "";
+            executedAutoCommandsCount = 0;
+        }
+
         isAutoTyping = true;
 
-        for (const cmd of AUTO_COMMANDS) {
+        for (let i = 0; i < AUTO_COMMANDS.length; i++) {
+            if (shouldStopExecution) break;
+
+            // 如果已经执行过该命令，跳过
+            if (i < executedAutoCommandsCount) continue;
+
+            const cmd = AUTO_COMMANDS[i];
+
             // 添加命令行和光标
             const result = addCommandLine();
             if (!result) break;
@@ -482,7 +567,9 @@ import { siteConfig } from "@config/site";
 
             // 打字效果
             await autoType(cmd, textSpan);
+            if (shouldStopExecution) break;
             await new Promise(resolve => setTimeout(resolve, 300));
+            if (shouldStopExecution) break;
 
             // 移除光标
             cursor.remove();
@@ -494,23 +581,42 @@ import { siteConfig } from "@config/site";
                 lines.forEach(line => addOutputLine(line));
             }
 
+            // 标记该命令已执行
+            executedAutoCommandsCount++;
+
             await new Promise(resolve => setTimeout(resolve, 500));
         }
 
         isAutoTyping = false;
+
+        // 如果被中断，不添加输入行，因为页面即将跳转
+        if (shouldStopExecution) return;
 
         // 自动演示完成后，添加可交互输入行
         addInputLine();
     }
 
     // 页面加载后启动
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", () => {
-            setTimeout(initAutoDemo, 300);
-        });
-    } else {
+    function startTerminal() {
+        shouldStopExecution = false;
         setTimeout(initAutoDemo, 300);
     }
+
+    // View Transitions 重新加载
+    // astro:page-load 在首次加载和后续导航时都会触发，所以只需要这一个监听器
+    document.addEventListener("astro:page-load", () => {
+        // 只有当终端元素存在时才启动（避免在非首页报错）
+        if (document.getElementById("terminal-content")) {
+            startTerminal();
+        }
+    });
+
+    // 在页面卸载或隐藏前保存状态
+    // 只在 View Transitions 切换前保存，刷新页面不保存
+    document.addEventListener("astro:before-swap", () => {
+        shouldStopExecution = true;
+        saveTerminalState();
+    });
 </script>
 
 <style>

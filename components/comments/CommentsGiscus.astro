@@ -19,6 +19,8 @@ const { mapping = "url", term = "" } = Astro.props;
 
 <div class="giscus-wrapper">
   <script
+    is:inline
+    data-astro-rerun
     src="https://giscus.app/client.js"
     data-repo={siteConfig.giscus.repo}
     data-repo-id={siteConfig.giscus.repoId}
