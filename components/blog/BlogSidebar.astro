@@ -93,7 +93,7 @@ const { tags, categories = [], archives = [] } = Astro.props;
 
             if (header && content && icon) {
                 // 移除旧的监听器（如果有的话，防止重复绑定）
-                const newHeader = header.cloneNode(true);
+                const newHeader = header.cloneNode(true) as HTMLElement;
                 header.parentNode?.replaceChild(newHeader, header);
 
                 newHeader.addEventListener("click", () => {

@@ -478,7 +478,7 @@ const topicIcon = getTopicConfig(topic).icon;
     // Smooth scroll for TOC links
     document.querySelectorAll(".toc-item").forEach(link => {
       // 移除旧的监听器
-      const newLink = link.cloneNode(true);
+      const newLink = link.cloneNode(true) as HTMLElement;
       link.parentNode?.replaceChild(newLink, link);
 
       newLink.addEventListener("click", e => {

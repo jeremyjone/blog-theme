@@ -6,13 +6,38 @@
     <div class="search-overlay"></div>
     <div class="search-container">
         <div class="search-header">
-            <input
-                type="text"
-                id="search-input-global"
-                placeholder="搜索全站内容 (Cmd+K)..."
-                autocomplete="off"
-            />
-            <button id="close-search" aria-label="Close search">&times;</button>
+            <div class="search-input-wrapper">
+                <input
+                    type="text"
+                    id="search-input-global"
+                    placeholder="搜索全站内容 (Cmd+K)..."
+                    autocomplete="off"
+                />
+                <button
+                    id="clear-search"
+                    class="clear-btn"
+                    aria-label="Clear search"
+                    style="display: none;"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        ><line x1="18" y1="6" x2="6" y2="18"></line><line
+                            x1="6"
+                            y1="6"
+                            x2="18"
+                            y2="18"></line></svg
+                    >
+                </button>
+            </div>
+            <button id="close-search" aria-label="Close search">Esc</button>
         </div>
         <div id="search-results-global" class="search-results">
             <div class="search-placeholder">输入关键词开始搜索...</div>
@@ -74,27 +99,79 @@
         align-items: center;
         padding: 1rem;
         border-bottom: 1px solid var(--color-border);
+        gap: 1rem;
     }
 
     :global([data-theme="dark"] .search-header) {
         border-color: #333;
     }
 
-    .search-header input {
+    .search-input-wrapper {
         flex: 1;
+        display: flex;
+        align-items: center;
+        position: relative;
+    }
+
+    .search-header input {
+        width: 100%;
         font-size: 1.2rem;
         border: none;
         background: transparent;
         color: var(--color-text);
         outline: none;
+        padding-right: 2rem; /* Space for clear button */
+    }
+
+    .clear-btn {
+        position: absolute;
+        right: 0;
+        background: none;
+        border: none;
+        color: var(--color-text-muted);
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition:
+            background-color 0.2s,
+            color 0.2s;
+    }
+
+    .clear-btn:hover {
+        background-color: var(--color-bg-secondary);
+        color: var(--color-text);
+    }
+
+    :global([data-theme="dark"] .clear-btn:hover) {
+        background-color: #333;
     }
 
     #close-search {
-        background: none;
-        border: none;
-        font-size: 1.5rem;
+        background: var(--color-bg-secondary);
+        border: 1px solid var(--color-border);
+        border-radius: 4px;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.8rem;
         cursor: pointer;
         color: var(--color-text-muted);
+        transition: all 0.2s;
+    }
+
+    #close-search:hover {
+        background: var(--color-border);
+        color: var(--color-text);
+    }
+
+    :global([data-theme="dark"] #close-search) {
+        background: #333;
+        border-color: #444;
+    }
+
+    :global([data-theme="dark"] #close-search:hover) {
+        background: #444;
     }
 
     .search-results {
@@ -191,6 +268,7 @@
     let modal: HTMLElement | null;
     let input: HTMLInputElement | null;
     let closeBtn: HTMLElement | null;
+    let clearBtn: HTMLElement | null;
     let overlay: HTMLElement | null;
     let resultsContainer: HTMLElement | null;
 
@@ -246,7 +324,9 @@
 
     async function performSearch(query: string) {
         if (!pagefind || !query.trim()) {
-            if (resultsContainer) resultsContainer.innerHTML = "";
+            if (resultsContainer)
+                resultsContainer.innerHTML =
+                    '<div class="search-placeholder">输入关键词开始搜索...</div>';
             return;
         }
 
@@ -325,6 +405,7 @@
             "search-input-global"
         ) as HTMLInputElement;
         closeBtn = document.getElementById("close-search");
+        clearBtn = document.getElementById("clear-search");
         overlay = document.querySelector(".search-overlay");
         resultsContainer = document.getElementById("search-results-global");
 
@@ -337,8 +418,33 @@
         closeBtn?.addEventListener("click", closeSearch);
         overlay?.addEventListener("click", closeSearch);
 
+        clearBtn?.addEventListener("click", () => {
+            if (input) {
+                input.value = "";
+                input.focus();
+                if (clearBtn) clearBtn.style.display = "none";
+                if (resultsContainer) {
+                    resultsContainer.innerHTML =
+                        '<div class="search-placeholder">输入关键词开始搜索...</div>';
+                }
+            }
+        });
+
         input?.addEventListener("input", e => {
             const val = (e.target as HTMLInputElement).value;
+
+            if (clearBtn) {
+                clearBtn.style.display = val ? "flex" : "none";
+            }
+
+            if (!val.trim()) {
+                if (resultsContainer) {
+                    resultsContainer.innerHTML =
+                        '<div class="search-placeholder">输入关键词开始搜索...</div>';
+                }
+                return;
+            }
+
             debouncedSearch(val);
         });
 
